@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./models:/app/models
+      - ./CT-CLIP_v2.pt:/app/CT-CLIP_v2.pt
+    environment:
+      - CTCLIP_PATH=/app/CT-CLIP_v2.pt
+      - VQA_MODEL_PATH=/app/models/model_checkpoint.pth
+      - TOKENIZER_NAME=microsoft/BiomedVLP-CXR-BERT-specialized
+      - UPLOAD_DIR=/app/uploads
+      - MODEL_DIR=/app/models
+      - CUDA_VISIBLE_DEVICES=0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  webapp:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://api:8000
+    depends_on:
+      - api
+    restart: unless-stopped
