@@ -1,36 +1,40 @@
-from fastapi import FastAPI, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from api.routes import router
-from utils.logging import logger
-from models.ct_clip_loader import load_ctclip_model
+FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
 
-# Initialize FastAPI app
-app = FastAPI(
-    title="CT-CLIP VQA API",
-    description="API for CT Scan VQA with CT-CLIP and BiomedVLP-CXR-BERT",
-    version="1.0.0"
-)
+WORKDIR /app
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    git \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
 
-# Include the API routes
-app.include_router(router)
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize models on startup"""
-    logger.info("Starting up the application")
-    
-    # Start model loading in the background
-    load_ctclip_model()
+# Set up model directories
+RUN mkdir -p /app/models/ct_report
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+# Copy application code
+COPY api/ ./api/
+COPY models/ ./models/
+COPY services/ ./services/
+COPY utils/ ./utils/
+COPY config.py .
+COPY main.py .
+
+# Create upload directory
+RUN mkdir -p uploads
+
+# Expose the port
+EXPOSE 8000
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV USE_8BIT_QUANTIZATION=True
+ENV ENABLE_CORS=True
+ENV ALLOW_SIMULATED_MODELS=True
+
+# Command
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

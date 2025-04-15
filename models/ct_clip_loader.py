@@ -1,6 +1,6 @@
 import torch
-from ct_clip.ctvit import CTViT
-from ct_clip.ct_clip import CTCLIP
+from models.ct_clip.ctvit import CTViT
+from models.ct_clip.ct_clip import CTCLIP
 from transformers import BertTokenizer, BertModel
 from utils.logging import logger
 from config import CTCLIP_PATH, TOKENIZER_NAME, DEVICE

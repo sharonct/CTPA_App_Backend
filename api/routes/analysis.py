@@ -15,25 +15,42 @@ async def analyze_scan_endpoint(request: AnalysisRequest):
     scan_id = request.scan_id
     questions = [q.text for q in request.questions]
     
-    # Ensure models are loaded
-    if not load_ctclip_model() or not load_vqa_model():
-        raise HTTPException(status_code=500, detail="Failed to load models")
+    logger.info(f"Received analysis request for scan {scan_id} with {len(questions)} questions")
     
+    # Check if we should use fallback mode
+    use_fallback = False
+    
+    # Try to ensure models are loaded
     try:
-        # Extract features from the scan
-        visual_features = extract_features(scan_id)
+        ctclip_loaded = load_ctclip_model()
+        vqa_loaded = load_vqa_model() 
         
-        # Process each question
+        if not ctclip_loaded or not vqa_loaded:
+            logger.warning("Models not loaded properly, using fallback mode")
+            use_fallback = True
+    except Exception as e:
+        logger.error(f"Error loading models: {e}")
+        use_fallback = True
+    
+    # Process in fallback mode if needed
+    if use_fallback:
+        logger.info("Using fallback mode for analysis")
+        from services.report_service import generate_fallback_report
+        
+        # Generate dummy responses
         responses = []
         for question in questions:
-            answer = generate_answer(visual_features, question)
+            if "generate report" in question.lower() or "create report" in question.lower():
+                answer = "Report has been generated using fallback mode."
+            else:
+                answer = "Unable to process this question with the AI model. Using fallback mode."
             responses.append(QuestionResponse(question=question, answer=answer))
         
-        # Generate a report if requested
+        # Use fallback report if report was requested
         report_html = None
         for q in questions:
             if "generate report" in q.lower() or "create report" in q.lower():
-                report_html = generate_report(visual_features)
+                report_html = generate_fallback_report()
                 break
         
         return AnalysisResponse(
@@ -42,39 +59,61 @@ async def analyze_scan_endpoint(request: AnalysisRequest):
             report_html=report_html
         )
     
+    # Normal processing with models
+    try:
+        # Extract features from the scan
+        logger.info(f"Extracting features for scan {scan_id}")
+        visual_features = extract_features(scan_id)
+        
+        # Process each question
+        logger.info(f"Processing {len(questions)} questions")
+        responses = []
+        for question in questions:
+            logger.info(f"Processing question: {question[:50]}...")
+            answer = generate_answer(visual_features, question)
+            responses.append(QuestionResponse(question=question, answer=answer))
+        
+        # Generate a report if requested
+        report_html = None
+        for q in questions:
+            if "generate report" in q.lower() or "create report" in q.lower():
+                logger.info("Generating report")
+                report_html = generate_report(visual_features)
+                break
+        
+        logger.info(f"Analysis completed for scan {scan_id}")
+        return AnalysisResponse(
+            scan_id=scan_id,
+            responses=responses,
+            report_html=report_html
+        )
+    
     except ValueError as e:
+        logger.error(f"Value error analyzing scan {scan_id}: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error analyzing scan {scan_id}: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Error analyzing scan: {str(e)}")
-
-@router.post("/ask/{scan_id}")
-async def ask_question_endpoint(scan_id: str, question: Question):
-    """Ask a single question about a scan"""
-    try:
-        # Ensure models are loaded
-        if not load_ctclip_model() or not load_vqa_model():
-            raise HTTPException(status_code=500, detail="Failed to load models")
         
-        # Extract features
-        visual_features = extract_features(scan_id)
-        
-        # Generate answer
-        answer = generate_answer(visual_features, question.text)
-        
-        return {
-            "scan_id": scan_id,
-            "question": question.text,
-            "answer": answer,
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error answering question for scan {scan_id}: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Error answering question: {str(e)}")
+        # Try to generate a fallback report
+        try:
+            from services.report_service import generate_fallback_report
+            report_html = generate_fallback_report()
+            
+            # Create basic responses
+            responses = []
+            for question in questions:
+                responses.append(QuestionResponse(
+                    question=question, 
+                    answer="An error occurred while processing this question."
+                ))
+            
+            return AnalysisResponse(
+                scan_id=scan_id,
+                responses=responses,
+                report_html=report_html
+            )
+        except:
+            # If even the fallback fails, raise the original error
+            raise HTTPException(status_code=500, detail=f"Error analyzing scan: {str(e)}")

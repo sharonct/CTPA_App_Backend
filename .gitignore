@@ -1,1 +1,4 @@
-.qodo
+.qodo/
+bitsandbytes/
+api.log
+__pycache__/
