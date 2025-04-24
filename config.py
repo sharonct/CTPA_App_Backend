@@ -26,7 +26,7 @@ print(f"Using device: {DEVICE}")
 # Allow simulated mode as fallback
 ALLOW_SIMULATED_MODELS = os.environ.get("ALLOW_SIMULATED_MODELS", "True").lower() == "true"
 
-ENABLE_CORS = True  # or False depending on your needs
+ENABLE_CORS = True
 DEBUG_MODE = True  # or False
-USE_VQA_MODEL = True  # or False
+USE_VQA_MODEL = False  # or False
 USE_CT_REPORT_MODEL = True  # or False

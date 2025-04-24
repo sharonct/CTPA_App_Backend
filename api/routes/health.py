@@ -9,6 +9,7 @@ async def health_check():
     """Check if the API is running and models are loaded"""
     return {
         "status": "healthy",
-        "model_loaded": model_loaded,
-        "device": str(DEVICE)
+        "model_loaded": model_loaded(),
+        "device": str(DEVICE),
+        "api_url": "http://localhost:8000"
     }

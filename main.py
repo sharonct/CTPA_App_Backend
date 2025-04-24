@@ -1,53 +1,59 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import health, scans, analysis
-from api.routes.report import router as report_router
-from utils.logging import logger
-from models.ct_clip_loader import load_ctclip_model
-from models.vqa_model import load_vqa_model
-from models.ct_report_model import load_ct_report_model
-from config import ENABLE_CORS, DEBUG_MODE, USE_VQA_MODEL, USE_CT_REPORT_MODEL
+from api.health import router as health_router
+from api.analysis import router as analysis_router
+from api.upload import router as upload_router
+from api.scans import router as scans_router
+from api.report import router as report_router
+import logging
 
-# Initialize FastAPI app
-app = FastAPI(
-    title="CTPA Report Generator API",
-    description="API for CT Pulmonary Angiography Report Generation",
-    version="1.0.0",
-    debug=DEBUG_MODE
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
-# Add CORS middleware if enabled
-if ENABLE_CORS:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# Create the FastAPI app
+app = FastAPI(
+    title="CTPA Analysis API",
+    description="API for analyzing CT Pulmonary Angiography scans",
+    version="1.0.0"
+)
 
-# Include the API routes
-app.include_router(health.router, tags=["Health"])
-app.include_router(scans.router, tags=["Scans"])
-app.include_router(analysis.router, tags=["Analysis"])
-app.include_router(report_router, prefix="/report", tags=["Reports"])
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, restrict this to your Streamlit app's URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize models on startup"""
-    logger.info("Starting up the application")
-    
-    # Load CT-CLIP model
-    load_ctclip_model()
-    
-    # Load VQA model if enabled
-    if USE_VQA_MODEL:
-        load_vqa_model()
-    
-    # Load CT Report model if enabled
-    if USE_CT_REPORT_MODEL:
-        load_ct_report_model()
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logging.info(f"Request: {request.method} {request.url.path}")
+    response = await call_next(request)
+    logging.info(f"Response status: {response.status_code}")
+    return response
 
+# Include routers
+app.include_router(health_router, tags=["health"])
+app.include_router(upload_router, tags=["upload"])
+app.include_router(scans_router, tags=["scans"])
+app.include_router(analysis_router, tags=["analysis"])
+app.include_router(report_router, tags=["report"])
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "message": "CTPA Analysis API",
+        "docs_url": "/docs",
+        "version": "1.0.0"
+    }
+
+# Run with: uvicorn main:app --reload
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
