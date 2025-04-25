@@ -1,348 +1,348 @@
-import streamlit as st
-import torch
-import numpy as np
-import os
-import sys
-from PIL import Image
-import matplotlib.pyplot as plt
-import io
-import time
+# import streamlit as st
+# import torch
+# import numpy as np
+# import os
+# import sys
+# from PIL import Image
+# import matplotlib.pyplot as plt
+# import io
+# import time
 
-# Import the necessary components (assumed to be in separate module files)
-# In a real implementation, you'd import these from your modules
-# sys.path.append('/path/to/your/modules')
-# from models.ct_report_model import load_ct_report_model
-# from ct_report_module import load_ct_report_model, RobustVisionFeatureExtractor, CTReportGenerator
+# # Import the necessary components (assumed to be in separate module files)
+# # In a real implementation, you'd import these from your modules
+# # sys.path.append('/path/to/your/modules')
+# # from models.ct_report_model import load_ct_report_model
+# # from ct_report_module import load_ct_report_model, RobustVisionFeatureExtractor, CTReportGenerator
 
-# load_ct_report_model()
+# # load_ct_report_model()
 
-# For demonstration, here's a simplified version of the CTScanChatInterface
-class CTScanChatInterface:
-    """Simplified version for Streamlit demo"""
+# # For demonstration, here's a simplified version of the CTScanChatInterface
+# class CTScanChatInterface:
+#     """Simplified version for Streamlit demo"""
     
-    def __init__(self, model_path=None, device=None):
-        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.current_image = None
-        self.generated_report = None
-        self.conversation_history = []
+#     def __init__(self, model_path=None, device=None):
+#         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#         self.current_image = None
+#         self.generated_report = None
+#         self.conversation_history = []
         
-        # In a real implementation, you would load models here
-        # self.model, self.tokenizer, self.vision_feature_extractor = self._load_model(model_path)
+#         # In a real implementation, you would load models here
+#         # self.model, self.tokenizer, self.vision_feature_extractor = self._load_model(model_path)
         
-        st.success("CT Scan Analysis System initialized successfully")
+#         st.success("CT Scan Analysis System initialized successfully")
     
-    def load_ct_scan(self, file_data):
-        """Load a CT scan file (.npz) and prepare it for analysis"""
-        try:
-            # Save the uploaded file temporarily
-            with open("temp_upload.npz", "wb") as f:
-                f.write(file_data)
+#     def load_ct_scan(self, file_data):
+#         """Load a CT scan file (.npz) and prepare it for analysis"""
+#         try:
+#             # Save the uploaded file temporarily
+#             with open("temp_upload.npz", "wb") as f:
+#                 f.write(file_data)
             
-            # Load the image data
-            image_data = np.load("temp_upload.npz")["arr_0"]
+#             # Load the image data
+#             image_data = np.load("temp_upload.npz")["arr_0"]
             
-            # Convert to tensor
-            image_tensor = torch.tensor(image_data, dtype=torch.float32)
+#             # Convert to tensor
+#             image_tensor = torch.tensor(image_data, dtype=torch.float32)
             
-            # Add channel dimension if needed
-            if image_tensor.ndim == 3:  # [D, H, W]
-                image_tensor = image_tensor.unsqueeze(0)  # Add channel dim
+#             # Add channel dimension if needed
+#             if image_tensor.ndim == 3:  # [D, H, W]
+#                 image_tensor = image_tensor.unsqueeze(0)  # Add channel dim
             
-            # Store the image tensor
-            self.current_image = image_tensor.to(self.device)
+#             # Store the image tensor
+#             self.current_image = image_tensor.to(self.device)
             
-            # Reset conversation state
-            self.conversation_history = []
-            self.generated_report = None
+#             # Reset conversation state
+#             self.conversation_history = []
+#             self.generated_report = None
             
-            # Remove temporary file
-            if os.path.exists("temp_upload.npz"):
-                os.remove("temp_upload.npz")
+#             # Remove temporary file
+#             if os.path.exists("temp_upload.npz"):
+#                 os.remove("temp_upload.npz")
             
-            return True, image_tensor.shape
+#             return True, image_tensor.shape
             
-        except Exception as e:
-            return False, str(e)
+#         except Exception as e:
+#             return False, str(e)
     
-    def generate_initial_report(self):
-        """Generate comprehensive report from the CT scan"""
-        if self.current_image is None:
-            return "Please load a CT scan first."
+#     def generate_initial_report(self):
+#         """Generate comprehensive report from the CT scan"""
+#         if self.current_image is None:
+#             return "Please load a CT scan first."
         
-        # In a real implementation, this would use the loaded model
-        # For demo, simulate processing time and return a sample report
-        time.sleep(2)  # Simulate processing
+#         # In a real implementation, this would use the loaded model
+#         # For demo, simulate processing time and return a sample report
+#         time.sleep(2)  # Simulate processing
         
-        # Sample medical report (in a real implementation, this would be generated by the model)
-        report = """
-        FINDINGS:
-        No evidence of pulmonary embolism. Bilateral subacute rib fractures noted. 
-        Small right lung nodule measuring approximately 4mm in diameter in the right upper lobe.
-        No pleural effusion. No pneumothorax. 
-        Cardiac size within normal limits. Normal mediastinal contours.
+#         # Sample medical report (in a real implementation, this would be generated by the model)
+#         report = """
+#         FINDINGS:
+#         No evidence of pulmonary embolism. Bilateral subacute rib fractures noted. 
+#         Small right lung nodule measuring approximately 4mm in diameter in the right upper lobe.
+#         No pleural effusion. No pneumothorax. 
+#         Cardiac size within normal limits. Normal mediastinal contours.
         
-        IMPRESSIONS:
-        1. No pulmonary embolism.
-        2. Bilateral subacute rib fractures.
-        3. Small right lung nodule, recommend comparison with prior studies.
+#         IMPRESSIONS:
+#         1. No pulmonary embolism.
+#         2. Bilateral subacute rib fractures.
+#         3. Small right lung nodule, recommend comparison with prior studies.
         
-        RECOMMENDATIONS:
-        Recommend comparison with an outside study for evaluation of temporal stability of the nodule.
-        If not available, per Fleischner Society guidelines, no follow-up is needed if the patient is considered at low risk for lung cancer.
-        If the patient is considered to be high-risk for lung cancer, then a low-dose follow-up CT in 12 months can be considered.
-        """
+#         RECOMMENDATIONS:
+#         Recommend comparison with an outside study for evaluation of temporal stability of the nodule.
+#         If not available, per Fleischner Society guidelines, no follow-up is needed if the patient is considered at low risk for lung cancer.
+#         If the patient is considered to be high-risk for lung cancer, then a low-dose follow-up CT in 12 months can be considered.
+#         """
         
-        # Store the generated report
-        self.generated_report = report
+#         # Store the generated report
+#         self.generated_report = report
         
-        # Add to conversation history
-        self.conversation_history.append({
-            "role": "system",
-            "content": f"Initial Report: {report}"
-        })
+#         # Add to conversation history
+#         self.conversation_history.append({
+#             "role": "system",
+#             "content": f"Initial Report: {report}"
+#         })
         
-        return report
+#         return report
     
-    def ask_question(self, question):
-        """Process a follow-up question about the CT scan or report"""
-        if self.current_image is None:
-            return "Please load a CT scan first."
+#     def ask_question(self, question):
+#         """Process a follow-up question about the CT scan or report"""
+#         if self.current_image is None:
+#             return "Please load a CT scan first."
         
-        if self.generated_report is None:
-            return "Please generate an initial report first."
+#         if self.generated_report is None:
+#             return "Please generate an initial report first."
         
-        # Add question to conversation history
-        self.conversation_history.append({
-            "role": "user",
-            "content": question
-        })
+#         # Add question to conversation history
+#         self.conversation_history.append({
+#             "role": "user",
+#             "content": question
+#         })
         
-        # In a real implementation, this would use the model
-        # For demo, simulate processing and return canned responses
-        time.sleep(1)  # Simulate processing
+#         # In a real implementation, this would use the model
+#         # For demo, simulate processing and return canned responses
+#         time.sleep(1)  # Simulate processing
         
-        # Simple rule-based responses for demo purposes
-        response = ""
-        question_lower = question.lower()
+#         # Simple rule-based responses for demo purposes
+#         response = ""
+#         question_lower = question.lower()
         
-        if "nodule" in question_lower:
-            response = "The CT scan shows a small right lung nodule measuring approximately 4mm in diameter in the right upper lobe. This is a small finding that requires follow-up as detailed in the recommendations section of the report."
+#         if "nodule" in question_lower:
+#             response = "The CT scan shows a small right lung nodule measuring approximately 4mm in diameter in the right upper lobe. This is a small finding that requires follow-up as detailed in the recommendations section of the report."
         
-        elif "fracture" in question_lower or "rib" in question_lower:
-            response = "The CT scan shows bilateral subacute rib fractures. These appear to be healing and likely represent injuries from a previous trauma. No acute fractures are identified."
+#         elif "fracture" in question_lower or "rib" in question_lower:
+#             response = "The CT scan shows bilateral subacute rib fractures. These appear to be healing and likely represent injuries from a previous trauma. No acute fractures are identified."
         
-        elif "embolism" in question_lower or "pe" in question_lower:
-            response = "There is no evidence of pulmonary embolism in this CT scan. The pulmonary arterial tree appears patent throughout with no filling defects."
+#         elif "embolism" in question_lower or "pe" in question_lower:
+#             response = "There is no evidence of pulmonary embolism in this CT scan. The pulmonary arterial tree appears patent throughout with no filling defects."
         
-        elif "follow" in question_lower or "recommendation" in question_lower:
-            response = "Based on the small right lung nodule, it's recommended to compare with prior studies if available. If the patient is high-risk for lung cancer, a follow-up low-dose CT in 12 months is recommended. No follow-up is needed if the patient is low-risk."
+#         elif "follow" in question_lower or "recommendation" in question_lower:
+#             response = "Based on the small right lung nodule, it's recommended to compare with prior studies if available. If the patient is high-risk for lung cancer, a follow-up low-dose CT in 12 months is recommended. No follow-up is needed if the patient is low-risk."
         
-        else:
-            response = "Based on the CT scan and the report, I can confirm there is no pulmonary embolism, but there are bilateral rib fractures and a small right lung nodule that should be monitored according to the patient's risk factors."
+#         else:
+#             response = "Based on the CT scan and the report, I can confirm there is no pulmonary embolism, but there are bilateral rib fractures and a small right lung nodule that should be monitored according to the patient's risk factors."
         
-        # Add answer to conversation history
-        self.conversation_history.append({
-            "role": "assistant",
-            "content": response
-        })
+#         # Add answer to conversation history
+#         self.conversation_history.append({
+#             "role": "assistant",
+#             "content": response
+#         })
         
-        return response
+#         return response
 
-    def create_sample_visualization(self):
-        """Create a sample visualization of the CT scan for display"""
-        if self.current_image is None:
-            return None
+#     def create_sample_visualization(self):
+#         """Create a sample visualization of the CT scan for display"""
+#         if self.current_image is None:
+#             return None
             
-        # In a real implementation, you would use the actual CT scan data
-        # For demo purposes, create a simple visualization
-        fig, axes = plt.subplots(2, 2, figsize=(10, 10))
-        axes = axes.flatten()
+#         # In a real implementation, you would use the actual CT scan data
+#         # For demo purposes, create a simple visualization
+#         fig, axes = plt.subplots(2, 2, figsize=(10, 10))
+#         axes = axes.flatten()
         
-        # Get actual shape or use placeholder
-        if hasattr(self.current_image, 'shape'):
-            C, D, H, W = self.current_image.shape
-            depth_indices = [D//4, D//2, 3*D//4, D-1]
-        else:
-            # Demo mode with random data
-            depth_indices = [0, 1, 2, 3]
-            D, H, W = 4, 128, 128
+#         # Get actual shape or use placeholder
+#         if hasattr(self.current_image, 'shape'):
+#             C, D, H, W = self.current_image.shape
+#             depth_indices = [D//4, D//2, 3*D//4, D-1]
+#         else:
+#             # Demo mode with random data
+#             depth_indices = [0, 1, 2, 3]
+#             D, H, W = 4, 128, 128
         
-        for i, depth_idx in enumerate(depth_indices):
-            # For demo, either use actual slice or create dummy
-            if hasattr(self.current_image, 'shape'):
-                # Get actual slice from tensor
-                try:
-                    slice_data = self.current_image[0, depth_idx, :, :].cpu().numpy()
-                except:
-                    slice_data = np.random.rand(H, W)  # Fallback
-            else:
-                # Create dummy slice
-                slice_data = np.random.rand(H, W)
+#         for i, depth_idx in enumerate(depth_indices):
+#             # For demo, either use actual slice or create dummy
+#             if hasattr(self.current_image, 'shape'):
+#                 # Get actual slice from tensor
+#                 try:
+#                     slice_data = self.current_image[0, depth_idx, :, :].cpu().numpy()
+#                 except:
+#                     slice_data = np.random.rand(H, W)  # Fallback
+#             else:
+#                 # Create dummy slice
+#                 slice_data = np.random.rand(H, W)
             
-            # Display the slice
-            axes[i].imshow(slice_data, cmap='gray')
-            axes[i].set_title(f"Slice {depth_idx}/{D}")
-            axes[i].axis('off')
+#             # Display the slice
+#             axes[i].imshow(slice_data, cmap='gray')
+#             axes[i].set_title(f"Slice {depth_idx}/{D}")
+#             axes[i].axis('off')
         
-        plt.tight_layout()
+#         plt.tight_layout()
         
-        # Convert plot to image
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png')
-        buf.seek(0)
+#         # Convert plot to image
+#         buf = io.BytesIO()
+#         plt.savefig(buf, format='png')
+#         buf.seek(0)
         
-        # Clean up plot
-        plt.close(fig)
+#         # Clean up plot
+#         plt.close(fig)
         
-        return buf
+#         return buf
 
 
-# Streamlit App
-def main():
-    # Set page config
-    st.set_page_config(
-        page_title="CT Scan Report Generator",
-        page_icon="🫁",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
+# # Streamlit App
+# def main():
+#     # Set page config
+#     st.set_page_config(
+#         page_title="CT Scan Report Generator",
+#         page_icon="🫁",
+#         layout="wide",
+#         initial_sidebar_state="expanded"
+#     )
     
-    # Initialize session state
-    if 'interface' not in st.session_state:
-        # In a real implementation, you would provide the model path
-        st.session_state.interface = CTScanChatInterface(model_path=None)
+#     # Initialize session state
+#     if 'interface' not in st.session_state:
+#         # In a real implementation, you would provide the model path
+#         st.session_state.interface = CTScanChatInterface(model_path=None)
     
-    if 'chat_history' not in st.session_state:
-        st.session_state.chat_history = []
+#     if 'chat_history' not in st.session_state:
+#         st.session_state.chat_history = []
     
-    if 'report_generated' not in st.session_state:
-        st.session_state.report_generated = False
+#     if 'report_generated' not in st.session_state:
+#         st.session_state.report_generated = False
     
-    if 'visualization' not in st.session_state:
-        st.session_state.visualization = None
+#     if 'visualization' not in st.session_state:
+#         st.session_state.visualization = None
 
-    # Custom styling
-    st.markdown("""
-    <style>
-        .main-header {
-            font-size: 2.5em;
-            color: #0066cc;
-        }
-        .section-header {
-            font-size: 1.5em;
-            color: #004d99;
-            margin-top: 1em;
-        }
-        .report-container {
-            background-color: #f8f9fa;
-            padding: 1.5em;
-            border-radius: 10px;
-            border: 1px solid #ddd;
-        }
-        .chat-message {
-            margin-bottom: 0.5em;
-            padding: 0.5em;
-            border-radius: 5px;
-        }
-        .user-message {
-            background-color: #e6f3ff;
-            text-align: right;
-            margin-left: 20%;
-        }
-        .assistant-message {
-            background-color: #f0f0f0;
-            margin-right: 20%;
-        }
-    </style>
-    """, unsafe_allow_html=True)
+#     # Custom styling
+#     st.markdown("""
+#     <style>
+#         .main-header {
+#             font-size: 2.5em;
+#             color: #0066cc;
+#         }
+#         .section-header {
+#             font-size: 1.5em;
+#             color: #004d99;
+#             margin-top: 1em;
+#         }
+#         .report-container {
+#             background-color: #f8f9fa;
+#             padding: 1.5em;
+#             border-radius: 10px;
+#             border: 1px solid #ddd;
+#         }
+#         .chat-message {
+#             margin-bottom: 0.5em;
+#             padding: 0.5em;
+#             border-radius: 5px;
+#         }
+#         .user-message {
+#             background-color: #e6f3ff;
+#             text-align: right;
+#             margin-left: 20%;
+#         }
+#         .assistant-message {
+#             background-color: #f0f0f0;
+#             margin-right: 20%;
+#         }
+#     </style>
+#     """, unsafe_allow_html=True)
 
-    # App header
-    st.markdown("<h1 class='main-header'>CT Scan Analysis and Report Generator</h1>", unsafe_allow_html=True)
+#     # App header
+#     st.markdown("<h1 class='main-header'>CT Scan Analysis and Report Generator</h1>", unsafe_allow_html=True)
     
-    # Layout: split into sidebar and main content
-    with st.sidebar:
-        st.markdown("<h2 class='section-header'>Upload CT Scan</h2>", unsafe_allow_html=True)
-        uploaded_file = st.file_uploader("Choose a CT scan file (.npz)", type=["npz"])
+#     # Layout: split into sidebar and main content
+#     with st.sidebar:
+#         st.markdown("<h2 class='section-header'>Upload CT Scan</h2>", unsafe_allow_html=True)
+#         uploaded_file = st.file_uploader("Choose a CT scan file (.npz)", type=["npz"])
         
-        if uploaded_file is not None:
-            # Load the CT scan
-            success, info = st.session_state.interface.load_ct_scan(uploaded_file.getvalue())
+#         if uploaded_file is not None:
+#             # Load the CT scan
+#             success, info = st.session_state.interface.load_ct_scan(uploaded_file.getvalue())
             
-            if success:
-                st.success(f"CT scan loaded successfully. Shape: {info}")
+#             if success:
+#                 st.success(f"CT scan loaded successfully. Shape: {info}")
                 
-                # Create visualization
-                st.session_state.visualization = st.session_state.interface.create_sample_visualization()
+#                 # Create visualization
+#                 st.session_state.visualization = st.session_state.interface.create_sample_visualization()
                 
-                # Reset report generation state
-                st.session_state.report_generated = False
-            else:
-                st.error(f"Error loading CT scan: {info}")
+#                 # Reset report generation state
+#                 st.session_state.report_generated = False
+#             else:
+#                 st.error(f"Error loading CT scan: {info}")
         
-        # Report generation button
-        if st.session_state.interface.current_image is not None:
-            if st.button("Generate Report", type="primary"):
-                with st.spinner("Generating comprehensive report..."):
-                    report = st.session_state.interface.generate_initial_report()
-                    st.session_state.report_generated = True
+#         # Report generation button
+#         if st.session_state.interface.current_image is not None:
+#             if st.button("Generate Report", type="primary"):
+#                 with st.spinner("Generating comprehensive report..."):
+#                     report = st.session_state.interface.generate_initial_report()
+#                     st.session_state.report_generated = True
     
-    # Main content area - split into visualization and report/chat
-    col1, col2 = st.columns([1, 1])
+#     # Main content area - split into visualization and report/chat
+#     col1, col2 = st.columns([1, 1])
     
-    # Left column: CT visualization
-    with col1:
-        st.markdown("<h2 class='section-header'>CT Scan Visualization</h2>", unsafe_allow_html=True)
+#     # Left column: CT visualization
+#     with col1:
+#         st.markdown("<h2 class='section-header'>CT Scan Visualization</h2>", unsafe_allow_html=True)
         
-        if st.session_state.visualization:
-            # Display the visualization
-            st.image(st.session_state.visualization, use_column_width=True)
-        else:
-            # Placeholder when no image is loaded
-            st.info("Load a CT scan to view visualization")
-            st.image("https://via.placeholder.com/512x512.png?text=CT+Scan+Visualization", use_column_width=True)
+#         if st.session_state.visualization:
+#             # Display the visualization
+#             st.image(st.session_state.visualization, use_column_width=True)
+#         else:
+#             # Placeholder when no image is loaded
+#             st.info("Load a CT scan to view visualization")
+#             st.image("https://via.placeholder.com/512x512.png?text=CT+Scan+Visualization", use_column_width=True)
     
-    # Right column: Report and chat interface
-    with col2:
-        # Report section
-        st.markdown("<h2 class='section-header'>CT Scan Report</h2>", unsafe_allow_html=True)
+#     # Right column: Report and chat interface
+#     with col2:
+#         # Report section
+#         st.markdown("<h2 class='section-header'>CT Scan Report</h2>", unsafe_allow_html=True)
         
-        if st.session_state.report_generated:
-            st.markdown(f"<div class='report-container'>{st.session_state.interface.generated_report.replace(chr(10), '<br>')}</div>", unsafe_allow_html=True)
-        else:
-            if st.session_state.interface.current_image is not None:
-                st.info("Click 'Generate Report' in the sidebar to analyze the CT scan")
-            else:
-                st.info("Upload a CT scan to get started")
+#         if st.session_state.report_generated:
+#             st.markdown(f"<div class='report-container'>{st.session_state.interface.generated_report.replace(chr(10), '<br>')}</div>", unsafe_allow_html=True)
+#         else:
+#             if st.session_state.interface.current_image is not None:
+#                 st.info("Click 'Generate Report' in the sidebar to analyze the CT scan")
+#             else:
+#                 st.info("Upload a CT scan to get started")
         
-        # Chat interface
-        if st.session_state.report_generated:
-            st.markdown("<h2 class='section-header'>Ask Follow-up Questions</h2>", unsafe_allow_html=True)
+#         # Chat interface
+#         if st.session_state.report_generated:
+#             st.markdown("<h2 class='section-header'>Ask Follow-up Questions</h2>", unsafe_allow_html=True)
             
-            # Display chat history
-            for message in st.session_state.chat_history:
-                if message["role"] == "user":
-                    st.markdown(f"<div class='chat-message user-message'><strong>You:</strong> {message['content']}</div>", unsafe_allow_html=True)
-                else:
-                    st.markdown(f"<div class='chat-message assistant-message'><strong>Assistant:</strong> {message['content']}</div>", unsafe_allow_html=True)
+#             # Display chat history
+#             for message in st.session_state.chat_history:
+#                 if message["role"] == "user":
+#                     st.markdown(f"<div class='chat-message user-message'><strong>You:</strong> {message['content']}</div>", unsafe_allow_html=True)
+#                 else:
+#                     st.markdown(f"<div class='chat-message assistant-message'><strong>Assistant:</strong> {message['content']}</div>", unsafe_allow_html=True)
             
-            # Input for new questions
-            user_question = st.text_input("Ask a question about the CT scan", key="user_question")
+#             # Input for new questions
+#             user_question = st.text_input("Ask a question about the CT scan", key="user_question")
             
-            if user_question:
-                # Process the question
-                response = st.session_state.interface.ask_question(user_question)
+#             if user_question:
+#                 # Process the question
+#                 response = st.session_state.interface.ask_question(user_question)
                 
-                # Update chat history in session state
-                st.session_state.chat_history.append({"role": "user", "content": user_question})
-                st.session_state.chat_history.append({"role": "assistant", "content": response})
+#                 # Update chat history in session state
+#                 st.session_state.chat_history.append({"role": "user", "content": user_question})
+#                 st.session_state.chat_history.append({"role": "assistant", "content": response})
                 
-                # Clear the input box (requires a rerun)
-                st.experimental_rerun()
+#                 # Clear the input box (requires a rerun)
+#                 st.experimental_rerun()
             
-            # Reset chat button
-            if st.button("Clear Chat History"):
-                st.session_state.chat_history = []
-                st.experimental_rerun()
+#             # Reset chat button
+#             if st.button("Clear Chat History"):
+#                 st.session_state.chat_history = []
+#                 st.experimental_rerun()
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
