@@ -9,7 +9,7 @@ MODEL_DIR = os.environ.get("MODEL_DIR", "./models")
 CTCLIP_PATH = os.environ.get("CTCLIP_PATH", "/mnt/c/Users/STRATHMORE/Desktop/Sharon_Tonui/CTPA-CLIP/CTPA_CLIP/models/CT-CLIP_v2.pt")
 VQA_MODEL_PATH = os.environ.get("VQA_MODEL_PATH", "/teamspace/studios/this_studio/models/vqa/model/checkpoint_epoch_9/full_model_checkpoint.pth")
 CT_REPORT_MODEL_PATH = os.environ.get("CT_REPORT_MODEL_PATH", "/mnt/c/Users/STRATHMORE/Desktop/Sharon_Tonui/CTPA-CLIP/CTPA_CLIP/models/" \
-"ct_report/best_model.pt")
+"ct_report/best_model_by_validation.pt")
 
 # Tokenizer and model names
 TOKENIZER_NAME = os.environ.get("TOKENIZER_NAME", "microsoft/BiomedVLP-CXR-BERT-specialized")
