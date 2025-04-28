@@ -1,38 +1,20 @@
 from datetime import datetime
 from utils.logging import logger
-from services.vqa_service import generate_answer
 
-def generate_report(visual_features, scan_data=None):
+
+def generate_html_report(key_findings, pe_detected, pe_probability):
     """
-    Generate an HTML report from visual features
+    Generate an HTML report from the provided report text and optional parameters.
     
     Args:
-        visual_features: Visual features from the scan
-        scan_data: Optional raw scan data
+        key_findings (list): List of key findings
+        pe_detected (bool): Whether pulmonary embolism was detected
+        pe_probability (float): Probability of PE if available
         
     Returns:
-        HTML string for the report
+        str: HTML formatted report
     """
     try:
-        # Generate title from model
-        title_q = "What is the diagnosis for this CT scan?"
-        diagnosis = generate_answer(visual_features, title_q)
-        
-        # Generate findings
-        findings_q = "List the key findings in this CT scan"
-        findings = generate_answer(visual_features, findings_q)
-        
-        # Generate impression
-        impression_q = "What is your impression of this CT scan?"
-        impression = generate_answer(visual_features, impression_q)
-        
-        # Generate recommendations
-        rec_q = "What recommendations do you have based on this CT scan?"
-        recommendations = generate_answer(visual_features, rec_q)
-        
-        # Detect if PE is present based on the diagnosis
-        pe_present = "pulmonary embolism" in diagnosis.lower()
-        
         # Define CSS styling for the report
         css_style = """
         <style>
@@ -104,15 +86,62 @@ def generate_report(visual_features, scan_data=None):
                 border-left: 4px solid #3498db;
                 margin: 15px 0;
             }
+            
+            .pe-probability {
+                display: inline-block;
+                padding: 5px 10px;
+                border-radius: 15px;
+                font-weight: 600;
+                margin-top: 10px;
+            }
+            
+            .high-probability {
+                background-color: #f9ebea;
+                color: #c0392b;
+                border: 1px solid #e74c3c;
+            }
+            
+            .medium-probability {
+                background-color: #fef9e7;
+                color: #d35400;
+                border: 1px solid #f39c12;
+            }
+            
+            .low-probability {
+                background-color: #eafaf1;
+                color: #27ae60;
+                border: 1px solid #2ecc71;
+            }
         </style>
-        """
-        
-        # Format findings as list items
-        findings_list = ""
-        for line in findings.split("\n"):
-            if line.strip():
-                findings_class = "pe-finding" if pe_present and "embolism" in line.lower() else ""
-                findings_list += f"<li><div class='{findings_class}'>{line}</div></li>"
+        """        
+
+        # Format findings as HTML list items
+        findings_html = ""
+        for finding in key_findings:
+            if finding.strip():
+                # Determine if this is a PE-related finding
+                finding_class = "pe-finding" if pe_detected and any(pe_term in finding.lower() for pe_term in ["embolism", "thrombus", "filling defect"]) else ""
+                findings_html += f"<li><div class='{finding_class}'>{finding}</div></li>"
+
+        # Format PE probability if available
+        pe_probability_html = ""
+        if pe_probability is not None:
+            prob_class = ""
+            if pe_probability >= 0.7:
+                prob_class = "high-probability"
+                prob_text = "High probability of pulmonary embolism"
+            elif pe_probability >= 0.3:
+                prob_class = "medium-probability"
+                prob_text = "Moderate probability of pulmonary embolism"
+            else:
+                prob_class = "low-probability"
+                prob_text = "Low probability of pulmonary embolism"
+                
+            pe_probability_html = f"""
+            <div class="pe-probability {prob_class}">
+                {prob_text} ({pe_probability:.2f})
+            </div>
+            """
         
         report_date = datetime.now().strftime("%B %d, %Y at %I:%M %p")
         
@@ -122,6 +151,7 @@ def generate_report(visual_features, scan_data=None):
         <div class="report-container">
             <div class="report-header">
                 <h3 class="report-title">CT PULMONARY ANGIOGRAPHY REPORT</h3>
+                {pe_probability_html}
             </div>
             
             <div class="report-section">
@@ -155,18 +185,18 @@ def generate_report(visual_features, scan_data=None):
             <div class="report-section">
                 <h4>FINDINGS:</h4>
                 <ul>
-                    {findings_list}
+                    {findings_html}
                 </ul>
             </div>
             
             <div class="report-section impression-section">
                 <h4>IMPRESSION:</h4>
-                <p>{impression}</p>
+                <p>{"PULMONARY EMBOLISM DETECTED." if pe_detected else "No pulmonary embolism detected."}</p>
             </div>
             
             <div class="report-section recommendation-section">
                 <h4>RECOMMENDATION:</h4>
-                <p>{recommendations}</p>
+                <p>{"Consider anticoagulation therapy and further cardiovascular assessment." if pe_detected else "No specific follow-up required for pulmonary embolism."}</p>
             </div>
             
             <div class="report-footer">

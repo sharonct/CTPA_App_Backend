@@ -6,6 +6,9 @@ import shutil
 from datetime import datetime
 from utils.logging import logger
 from config import UPLOAD_DIR
+import torch
+import torch.nn.functional as F
+
 
 def save_uploaded_file(scan_id, file):
     """Save an uploaded file to the scan directory"""
@@ -19,47 +22,101 @@ def save_uploaded_file(scan_id, file):
     
     return file_path
 
+def preprocess_nifti(file_path, metadata=None, target_size=480, target_depth=240):
+    """
+    Preprocess a NIFTI file for inference, following the same steps as the training pipeline
+    
+    Args:
+        file_path: Path to the NIFTI file (.nii or .nii.gz)
+        metadata: Optional dictionary with metadata (slope, intercept, xy_spacing, z_spacing)
+        target_size: Target size for height and width
+        target_depth: Target size for depth
+    
+    Returns:
+        numpy.ndarray: Preprocessed CT scan data
+    """
+    try:
+        logger.info(f"Loading NIFTI file from {file_path}")
+        # Load the NIFTI file
+        nii_img = nib.load(file_path)
+        img_data = nii_img.get_fdata()
+        
+        # Default values to use if metadata is not provided
+        slope = 1.0
+        intercept = 0.0
+        xy_spacing = 1.0
+        z_spacing = 1.0
+        
+        # If metadata is provided, extract the relevant values
+        if metadata is not None:
+            if isinstance(metadata, dict):
+                # Extract values from dictionary
+                slope = float(metadata.get("RescaleSlope", metadata.get("slope", slope)))
+                intercept = float(metadata.get("RescaleIntercept", metadata.get("intercept", intercept)))
+                xy_spacing = float(metadata.get("XYSpacing", metadata.get("xy_spacing", xy_spacing)))
+                z_spacing = float(metadata.get("ZSpacing", metadata.get("z_spacing", z_spacing)))
+        else:
+            # Try to extract spacing info from the NIFTI header if available
+            try:
+                # Get pixel dimensions from NIfTI header
+                pixdim = nii_img.header.get('pixdim')
+                if pixdim is not None and len(pixdim) >= 4:
+                    # pixdim[1:4] contains the x, y, z voxel dimensions
+                    xy_spacing = (pixdim[1] + pixdim[2]) / 2  # Average of x and y spacing
+                    z_spacing = pixdim[3]
+                    logger.info(f"Extracted spacing from NIFTI header: xy={xy_spacing}, z={z_spacing}")
+            except Exception as e:
+                logger.warning(f"Could not extract spacing from NIFTI header: {e}")
+        
+        # Apply rescale slope and intercept to get proper Hounsfield Units
+        img_data = slope * img_data + intercept
+        
+        # Clip values to HU range -1000 to 1000
+        hu_min, hu_max = -1000, 1000
+        img_data = np.clip(img_data, hu_min, hu_max)
+        
+        # Normalize by dividing by 1000
+        img_data = (img_data / 1000).astype(np.float32)
+        
+        # Convert to the right orientation - NIFTI data is often [H, W, D]
+        # but we expect [D, H, W] for our model
+        if img_data.shape[2] < img_data.shape[0] and img_data.shape[2] < img_data.shape[1]:
+            # If the third dimension is much smaller, it's likely the depth dimension
+            img_data = np.transpose(img_data, (2, 0, 1))
+        
+        # Convert to tensor for processing
+        tensor = torch.tensor(img_data).unsqueeze(0).unsqueeze(0)  # [1, 1, D, H, W]
+        
+        # Process dimensions
+        batch, channel, depth, height, width = tensor.shape
+        
+        # Handle depth dimension
+        if depth > target_depth:
+            start = (depth - target_depth) // 2
+            tensor = tensor[:, :, start:start+target_depth, :, :]
+        elif depth < target_depth:
+            pad_size = target_depth - depth
+            pad_before = pad_size // 2
+            pad_after = pad_size - pad_before
+            tensor = F.pad(tensor, (0, 0, 0, 0, pad_before, pad_after), mode='constant', value=0)
+        
+        # Resize to target size
+        resized_tensor = F.interpolate(
+            tensor.float(), 
+            size=(target_depth, target_size, target_size), 
+            mode='trilinear', 
+            align_corners=False
+        )
+        
+        logger.info(f"Preprocessed NIFTI file to shape: {resized_tensor.shape}")
+        return resized_tensor
+        
+    except Exception as e:
+        logger.error(f"Error preprocessing NIFTI file: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
 
-def load_preprocessed_scan(file_path):
-    data = np.load(file_path)
-    
-    # Assuming the array is saved as the first (and only) item in the .npz file
-    scan_array = data[data.files[0]]
-    
-    # Convert to torch tensor
-    # Add batch and channel dimensions
-    tensor = torch.from_numpy(scan_array).float()
-    tensor = tensor.unsqueeze(0).unsqueeze(0)  # [1, 1, depth, height, width]
-    
-    return tensor
-
-def preprocess_ct_scan(ct_scan, target_size=480, target_depth=240):
-    # Ensure tensor is 4D or 5D: [batch, channel, depth, height, width]
-    if ct_scan.dim() == 3:
-        ct_scan = ct_scan.unsqueeze(0)
-    
-    batch, channel, depth, height, width = ct_scan.shape
-    
-    # Select middle slices and reshape to match model expectations
-    if depth > target_depth:
-        start = (depth - target_depth) // 2
-        ct_scan = ct_scan[:, :, start:start+target_depth, :, :]
-    elif depth < target_depth:
-        # Pad if fewer slices
-        pad_size = target_depth - depth
-        pad_before = pad_size // 2
-        pad_after = pad_size - pad_before
-        ct_scan = F.pad(ct_scan, (0, 0, 0, 0, pad_before, pad_after), mode='constant', value=0)
-    
-    # Resize to target size (260 allows for 13x20 patches)
-    ct_scan_resized = F.interpolate(
-        ct_scan.float(), 
-        size=(target_depth, target_size, target_size), 
-        mode='trilinear', 
-        align_corners=False
-    )
-    
-    return ct_scan_resized
 
 def load_scan_data(file_path):
     """Load scan data from a file"""

@@ -1,10 +1,19 @@
+import os
+import sys
 import torch
+import torch.nn.functional as F
+import numpy as np
+import logging
+import nibabel as nib
 from datetime import datetime
+
+# Setup logging
 from utils.logging import logger
-from utils.file_utils import load_scan_data, load_metadata
-from models.ct_report_model import get_ct_report_model
+from utils.file_utils import load_scan_data, load_metadata, save_metadata, preprocess_nifti
+from models.ct_report_model import get_ct_report_model, load_ct_report_model
 from config import DEVICE
-from services.report_service import generate_report as generate_html_report
+from services.report_service import generate_html_report
+
 
 def generate_ct_report(scan_id, prompt=None):
     """
@@ -31,24 +40,35 @@ def generate_ct_report(scan_id, prompt=None):
         if model is None:
             raise ValueError("CT Report Generator model not loaded")
         
-        # Load scan data
+        # Load scan data - with support for NIFTI files
         file_path = metadata["filepath"]
-        scan_data = load_scan_data(file_path)
-        
-        # Prepare scan tensor
-        if scan_data.ndim == 3:  # [D, H, W]
-            scan_tensor = torch.tensor(scan_data).unsqueeze(0).unsqueeze(0)  # [1, 1, D, H, W]
-        elif scan_data.ndim == 4:  # [C, D, H, W]
-            scan_tensor = torch.tensor(scan_data).unsqueeze(0)  # [1, C, D, H, W]
+        if file_path.endswith('.nii') or file_path.endswith('.nii.gz'):
+            logger.info(f"Processing NIFTI file: {file_path}")
+            scan_data = preprocess_nifti(file_path, metadata)
         else:
-            raise ValueError(f"Unexpected scan dimensions: {scan_data.shape}")
+            logger.info(f"Loading scan data from: {file_path}")
+            scan_data = load_scan_data(file_path)
+        
+        # # Prepare scan tensor
+        # if scan_data.ndim == 3:  # [D, H, W]
+        #     scan_tensor = torch.tensor(scan_data).unsqueeze(0).unsqueeze(0)  # [1, 1, D, H, W]
+        # elif scan_data.ndim == 4:  # [C, D, H, W]
+        #     scan_tensor = torch.tensor(scan_data).unsqueeze(0)  # [1, C, D, H, W]
+        # else:
+        #     raise ValueError(f"Unexpected scan dimensions: {scan_data.shape}")
         
         # Move tensor to device
-        scan_tensor = scan_tensor.to(DEVICE, dtype=torch.float32)
+        scan_tensor = scan_data.to(DEVICE, dtype=torch.float32)
         
         # Default prompt if not provided
         if prompt is None:
-            prompt = "Generate a detailed clinical report for this CT pulmonary angiogram scan:"
+            prompt = "As a Radiology expert, you are a board-certified thoracic radiologist analyzing this CTPA scan for potential " \
+            "pulmonary embolism and other thoracic pathologies. Your goal is to generate a comprehensive, accurate radiological report " \
+            "that clearly identifies any pulmonary emboli and associated findings. Methodically evaluate all pulmonary arteries from " \
+            "main to subsegmental branches, describe any filling defects, and note relevant pulmonary, cardiac, and pleural findings " \
+            "using precise radiological terminology. The report should follow standard radiological formatting with clear findings and " \
+            "impression sections suitable for clinical decision-making by referring physicians."
+
         
         # Generate report
         logger.info(f"Generating CT report for scan {scan_id}")
@@ -60,22 +80,28 @@ def generate_ct_report(scan_id, prompt=None):
                 max_length=512,
                 temperature=0.7
             )
+    
         
+        # Process report to extract findings and PE probability
+        key_findings = extract_key_findings(report_text)
+        pe_detected = has_pulmonary_embolism(report_text)
+        pe_probability = calculate_pe_probability(report_text)
+
         # Generate HTML report
-        # Use the feature extractor directly from the model
-        visual_features = model.vision_feature_extractor(scan_tensor)
-        report_html = generate_html_report(visual_features, scan_data)
+        report_html = generate_html_report(key_findings, pe_detected, pe_probability)
         
         # Update metadata with report generation time
         metadata["report_generated_time"] = datetime.now().isoformat()
-        from utils.file_utils import save_metadata
         save_metadata(scan_id, metadata)
         
         return {
-            "scan_id": scan_id,
+            "scan_id": scan_id,                                           
             "report_text": report_text,
             "report_html": report_html,
-            "generated_time": metadata["report_generated_time"]
+            "generated_time": metadata["report_generated_time"],
+            "key_findings": key_findings,
+            "pe_detected": pe_detected,
+            "pe_probability": pe_probability
         }
         
     except Exception as e:
@@ -86,49 +112,84 @@ def generate_ct_report(scan_id, prompt=None):
 
 def extract_key_findings(report_text):
     """
-    Extract key findings from the report text
+    Extract key findings from the report text, clean repetitive phrases,
+    and format findings in a clean list format.
     
     Args:
         report_text: The report text
         
     Returns:
-        list: List of key findings
+        list: List of key findings as clean statements
     """
-    # Split report by lines and filter out empty lines
+    import re
+    
+    # Split report by lines and join to process as a single text
     lines = [line.strip() for line in report_text.split('\n') if line.strip()]
+    full_text = ' '.join(lines)
     
-    findings = []
-    in_findings_section = False
+    # Common patterns to remove
+    patterns_to_remove = [
+        r'there are no substantial differences between the preliminary results and the impressions in this final report',
+        r'case discussed with(?:\s+\w+)*(?:\s+at)?(?:\s+on)?(?:\s+\d+\s*(?:am|pm|AM|PM))?',
+        r'\b\d+\s*(?:am|pm|AM|PM)\b'
+    ]
     
-    # Look for findings section
-    for line in lines:
-        lower_line = line.lower()
-        
-        # Check for findings section headers
-        if "findings:" in lower_line or "finding:" in lower_line:
-            in_findings_section = True
+    # Remove patterns
+    for pattern in patterns_to_remove:
+        full_text = re.sub(pattern, '', full_text, flags=re.IGNORECASE)
+    
+    # Clean up multiple spaces and periods
+    full_text = re.sub(r'\s+', ' ', full_text)      # Multiple spaces to single space
+    full_text = re.sub(r'\.+', '.', full_text)      # Multiple periods to single period
+    full_text = re.sub(r'\s+\.', '.', full_text)    # Space before period
+    full_text = re.sub(r'\.\s+', '. ', full_text)   # Normalize space after period
+    
+    # Split by periods to get individual findings
+    raw_findings = [f.strip() for f in full_text.split('.') if f.strip()]
+    
+    # Filter out irrelevant content
+    filtered_findings = []
+    for finding in raw_findings:
+        # Skip very short findings or anything with case discussion that wasn't caught earlier
+        if len(finding) < 5 or re.search(r'case discussed|discussed with', finding, re.IGNORECASE):
             continue
-        
-        # Check for end of findings section
-        if in_findings_section and ("impression:" in lower_line or "assessment:" in lower_line or "conclusion:" in lower_line):
-            in_findings_section = False
-            continue
-        
-        # Collect findings
-        if in_findings_section:
-            # Remove bullet points and leading/trailing whitespace
-            finding = line.strip()
-            if finding.startswith('-') or finding.startswith('•'):
-                finding = finding[1:].strip()
-            
-            if finding:
-                findings.append(finding)
+        filtered_findings.append(finding)
     
-    # If no findings section was identified, use first 3-5 lines as findings
-    if not findings and len(lines) >= 3:
-        findings = lines[:min(5, len(lines))]
+    # Deduplicate findings - remove any duplicate statements
+    unique_findings = []
+    for finding in filtered_findings:
+        normalized = finding.lower()
+        if normalized not in [f.lower() for f in unique_findings]:
+            unique_findings.append(finding)
     
-    return findings
+    # Format findings with proper capitalization and ending period
+    formatted_findings = []
+    for finding in unique_findings:
+        # Capitalize first letter
+        formatted = finding[0].upper() + finding[1:] if finding else ""
+        # Add period if missing
+        if not formatted.endswith('.'):
+            formatted += "."
+        formatted_findings.append(formatted)
+    
+    # Prioritize findings with medical terms if we have too many
+    if len(formatted_findings) > 5:
+        medical_terms = ["pulmonary", "embolism", "aortic", "nodule", "mass", 
+                        "effusion", "pneumonia", "consolidation", "opacity", 
+                        "infiltrate", "metastatic", "thrombus", "dissection"]
+        
+        # Find findings with medical terms
+        medical_findings = [f for f in formatted_findings 
+                           if any(term in f.lower() for term in medical_terms)]
+        
+        # If we have medical findings, use those, otherwise use first 5
+        if medical_findings:
+            return medical_findings[:5]
+        else:
+            return formatted_findings[:5]
+    
+    return formatted_findings
+
 
 def has_pulmonary_embolism(report_text):
     """
@@ -163,6 +224,7 @@ def has_pulmonary_embolism(report_text):
                 return True
     
     return False
+
 
 def calculate_pe_probability(report_text):
     """

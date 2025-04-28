@@ -20,7 +20,7 @@ class RobustVisionFeatureExtractor(nn.Module):
     and extracts meaningful features while gracefully handling errors.
     Optimized for memory efficiency and speed.
     """
-    def __init__(self, ctclip_model, feature_dim=512, device=None, dtype=None):
+    def __init__(self, ctclip_model, feature_dim=256, device=None, dtype=None):
         super().__init__()
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.ctclip = ctclip_model.to(self.device)
@@ -77,7 +77,7 @@ class CrossAttentionLayer(nn.Module):
     """
     Optimized cross-attention layer for attending from text to vision features
     """
-    def __init__(self, text_dim=768, vision_dim=512, num_heads=8, dropout=0.1):
+    def __init__(self, text_dim=768, vision_dim=256, num_heads=4, dropout=0.05):
         super().__init__()
         # Fewer attention heads and lower dropout for faster training
         self.query = nn.Linear(text_dim, text_dim)
@@ -188,7 +188,7 @@ class CTReportGenerator(nn.Module):
         # Return logits for training
         return lm_head_output
 
-    def generate_report(self, images, prompt, max_length=512, temperature=0.7):
+    def generate_report(self, images, prompt, max_length=256, temperature=0.7):
         """
         Generate a CT scan report, optimized for memory efficiency
         
@@ -301,8 +301,8 @@ def load_model(model_path, device=None):
     
     # Set device
     # if device is None:
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # device=torch.device("cpu")
+    #     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device=torch.device("cpu")
     # Load checkpoint
     try:
         checkpoint = torch.load(model_path, map_location=device, weights_only=False)
@@ -324,10 +324,10 @@ def load_model(model_path, device=None):
         
         # Apply LoRA (with reduced parameters)
         lora_config = LoraConfig(
-            r=16,                # Reduced from 16
-            lora_alpha=32,      # Reduced from 32
-            lora_dropout=0.1,  # Lower dropout 0.05
-            target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],  # Fewer target  "q_proj", "v_proj"
+            r=8,                # Reduced from 16
+            lora_alpha=16,      # Reduced from 32
+            lora_dropout=0.05,  # Lower dropout
+            target_modules=["q_proj", "v_proj"],  # Fewer target modules
             bias="none"
         )
         llm = get_peft_model(llm, lora_config)
@@ -349,7 +349,7 @@ def load_model(model_path, device=None):
             # Create feature extractor with reduced feature dimension
             vision_feature_extractor = RobustVisionFeatureExtractor(
                 ctclip, 
-                feature_dim=512,  # Reduced from 512, 256
+                feature_dim=256,  # Reduced from 512
                 device=device
             )
             

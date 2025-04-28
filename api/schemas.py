@@ -15,7 +15,11 @@ class QuestionResponse(BaseModel):
 class AnalysisResponse(BaseModel):
     scan_id: str
     responses: List[QuestionResponse]
-    report_html: Optional[str] = None
+    report_text: Optional[str] = None
+
+    report_html: Optional[str] = None                            
+    pe_detected: Optional[str] = None
+    pe_probability: Optional[str] = None
 
 class ScanMetadata(BaseModel):
     scan_id: str
