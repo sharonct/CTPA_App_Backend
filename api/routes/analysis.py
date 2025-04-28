@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException
-from datetime import datetime
-from api.schemas import AnalysisRequest, AnalysisResponse, Question, QuestionResponse
-from services.vqa_service import extract_features, generate_answer, analyze_scan
-from services.report_service import generate_report
+from api.schemas import AnalysisRequest, AnalysisResponse, QuestionResponse
 from utils.logging import logger
 from models.ct_clip_loader import load_ctclip_model
-from models.vqa_model import load_vqa_model
+from models.ct_report_model import load_ct_report_model
+
+# Import the NIFTI processing function
+from services.ct_report_service import generate_ct_report
 
 router = APIRouter()
 
@@ -23,9 +23,9 @@ async def analyze_scan_endpoint(request: AnalysisRequest):
     # Try to ensure models are loaded
     try:
         ctclip_loaded = load_ctclip_model()
-        vqa_loaded = load_vqa_model() 
+        report_loaded = load_ct_report_model()
         
-        if not ctclip_loaded or not vqa_loaded:
+        if not ctclip_loaded or not report_loaded:
             logger.warning("Models not loaded properly, using fallback mode")
             use_fallback = True
     except Exception as e:
@@ -61,32 +61,50 @@ async def analyze_scan_endpoint(request: AnalysisRequest):
     
     # Normal processing with models
     try:
-        # Extract features from the scan
-        logger.info(f"Extracting features for scan {scan_id}")
-        visual_features = extract_features(scan_id)
-        
-        # Process each question
-        logger.info(f"Processing {len(questions)} questions")
-        responses = []
-        for question in questions:
-            logger.info(f"Processing question: {question[:50]}...")
-            answer = generate_answer(visual_features, question)
-            responses.append(QuestionResponse(question=question, answer=answer))
         
         # Generate a report if requested
         report_html = None
-        for q in questions:
-            if "generate report" in q.lower() or "create report" in q.lower():
-                logger.info("Generating report")
-                report_html = generate_report(visual_features)
-                break
+        report_text = None
+        pe_detected = None
+        pe_probability = None
         
-        logger.info(f"Analysis completed for scan {scan_id}")
-        return AnalysisResponse(
+        logger.info("Generating report")
+        
+        # Use the enhanced report generator for both HTML and text reports
+        try:            
+            # Generate the comprehensive report
+            report_result = generate_ct_report(scan_id)
+            
+            # Extract the HTML and text components
+            report_html = report_result.get("report_html")
+            report_text = report_result.get("report_text")
+            pe_detected = report_result.get("pe_detected")
+            pe_probability = report_result.get("pe_probability")
+                    
+        except Exception as report_error:
+            logger.error(f"Error with enhanced report generation: {report_error}")
+    
+        responses = []
+        
+        # Prepare the response
+        response = AnalysisResponse(
             scan_id=scan_id,
             responses=responses,
             report_html=report_html
         )
+        
+        # Add the additional report information if available
+        if report_text:
+            response.report_text = report_text
+        
+        if pe_detected is not None:
+            response.pe_detected = pe_detected
+            
+        if pe_probability is not None:
+            response.pe_probability = pe_probability
+        
+        logger.info(f"Analysis completed for scan {scan_id}")
+        return response
     
     except ValueError as e:
         logger.error(f"Value error analyzing scan {scan_id}: {e}")

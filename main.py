@@ -4,7 +4,6 @@ from api.routes import health, scans, analysis
 from api.routes.report import router as report_router
 from utils.logging import logger
 from models.ct_clip_loader import load_ctclip_model
-from models.vqa_model import load_vqa_model
 from models.ct_report_model import load_ct_report_model
 from config import ENABLE_CORS, DEBUG_MODE, USE_VQA_MODEL, USE_CT_REPORT_MODEL
 import uvicorn
@@ -17,10 +16,6 @@ async def lifespan(app: FastAPI):
 
     # Load CT-CLIP model
     load_ctclip_model()
-
-    # Load VQA model if enabled
-    if USE_VQA_MODEL:
-        load_vqa_model()
 
     # Load CT Report model if enabled
     if USE_CT_REPORT_MODEL:
