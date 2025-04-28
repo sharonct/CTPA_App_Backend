@@ -4,4 +4,3 @@ api.log
 __pycache__/
 venv
 logs
-uploads
